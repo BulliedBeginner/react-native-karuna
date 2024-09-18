@@ -1,70 +1,122 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import { useState } from "react";
+import {
+	KeyboardAvoidingView,
+	Text,
+	View,
+	TextInput,
+	TouchableOpacity,
+	TouchableWithoutFeedback,
+	ScrollView,
+	Platform,
+	Button,
+} from "react-native";
+import TaskDrawer from "@/components/TaskDrawer";
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { Trash, Check } from "lucide-react-native";
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+import { useTaskStore } from "@/store/useTaskStore";
+import { useTaskStoreFirebase } from "@/store/useTaskStoreFirestore";
+import { auth } from "@/firebaseConfig";
+import { useRouter } from "expo-router";
+
+export default function App() {
+	const router = useRouter();
+	const { task, taskItems, setTask, handleAddTask, completeTask, showDeleteConfirmation } = useTaskStore();
+
+	const [visibleModals, setVisibleModals] = useState(Array(taskItems.length).fill(false));
+
+	console.log(taskItems);
+	console.log(auth.currentUser);
+
+	const handleOuterPress = (index: number) => {
+		const newVisibleModals = [...visibleModals];
+		newVisibleModals[index] = !newVisibleModals[index];
+		setVisibleModals(newVisibleModals);
+	};
+
+	const closeModal = (index: number) => {
+		console.log(`Closing modal for item ${index}`);
+		const newVisibleModals = [...visibleModals];
+		newVisibleModals[index] = false;
+		setVisibleModals(newVisibleModals);
+	};
+
+	const logout = async () => {
+		await auth.signOut();
+		router.replace("/login");
+	};
+
+	return (
+		<View className="flex-1 bg-gray-100">
+			<ScrollView
+				contentContainerStyle={{
+					flexGrow: 1,
+				}}
+				keyboardShouldPersistTaps="handled">
+				<View className="pt-20 px-5">
+					<View className="flex-row justify-between items-center">
+						<Text className="text-2xl font-bold">Tasks</Text>
+						<View className="flex-col gap-2">
+							<Text>{auth.currentUser?.email}</Text>
+							<Button title="Logout" onPress={logout} />
+						</View>
+					</View>
+					<View className="mt-8">
+						{taskItems.map((item, index) => {
+							return (
+								<View key={"all" + index}>
+									<TouchableWithoutFeedback onPress={() => handleOuterPress(index)}>
+										<View
+											className={
+												"p-4 rounded-lg flex-row items-center justify-between mb-5 bg-white" +
+												(item.completed ? " opacity-80" : "")
+											}>
+											<View className="flex-row items-center flex-wrap">
+												<TouchableWithoutFeedback onPress={() => completeTask(index)}>
+													<View className="border-2 border-[#55BCF6] w-6 h-6 opacity-40 rounded-sm mr-4 relative">
+														{item.completed && <Check color="#55BCF6" size={24} className="absolute" />}
+													</View>
+												</TouchableWithoutFeedback>
+												<Text className="max-w-[80%]">{item.text}</Text>
+											</View>
+											<TouchableOpacity onPress={() => showDeleteConfirmation(index)}>
+												<Trash color="#f00" size={24} />
+											</TouchableOpacity>
+										</View>
+									</TouchableWithoutFeedback>
+									<TaskDrawer
+										isVisible={visibleModals[index]}
+										onClose={() => closeModal(index)}
+										taskText={item.text}
+										index={index}
+									/>
+								</View>
+							);
+						})}
+					</View>
+				</View>
+			</ScrollView>
+
+			<KeyboardAvoidingView
+				behavior={Platform.OS === "ios" ? "padding" : "height"}
+				className="absolute bottom-16 w-full flex-row justify-around items-center">
+				<TextInput
+					className="p-4 px-6 bg-white rounded-full border-gray-400 border w-[250px]"
+					placeholder={"Write a task"}
+					value={task?.text}
+					onChangeText={text =>
+						setTask({
+							text,
+							completed: false,
+						})
+					}
+				/>
+				<TouchableOpacity onPress={() => handleAddTask()}>
+					<View className="w-14 h-14 rounded-full bg-white justify-center items-center border-gray-400 border">
+						<Text>+</Text>
+					</View>
+				</TouchableOpacity>
+			</KeyboardAvoidingView>
+		</View>
+	);
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
